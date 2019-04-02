@@ -13,11 +13,11 @@
 #include <cstring>
 #include <limits>
 
-#define MAX_ARGS 1024
-#define MAX_RETRIES 100
+const int MAX_ARGS = 1024;
+const int MAX_RETRIES = 100;
 
-char* parsed[MAX_ARGS];
-char* env[MAX_ARGS];
+char *parsed[MAX_ARGS];
+char *env[MAX_ARGS];
 std::vector<std::string> files;
 bool filter_inum, filter_name, filter_exec, filter_nlinks, filter_size;
 int type_size;
@@ -28,21 +28,22 @@ std::string name;
 
 void out_stat_errors() {
     if (errno == ENAMETOOLONG) {
-        printf("Pathname is too long: %s\n", strerror(errno));
+        fprintf(stderr,"Pathname is too long: %s\n", strerror(errno));
     } else if (errno == ENOENT) {
-        printf("A component of pathname does not exist, or pathname is an empty string: %s\n", strerror(errno));
+        fprintf(stderr,"A component of pathname does not exist, or pathname is an empty string: %s\n", strerror(errno));
     } else if (errno == ENOTDIR) {
-        printf("A component of the path prefix of pathname is not a directory: %s\n", strerror(errno));
+        fprintf(stderr,"A component of the path prefix of pathname is not a directory: %s\n", strerror(errno));
     } else if (errno == EFAULT) {
-        printf("Bad adress: %s\n", strerror(errno));
+        fprintf(stderr,"Bad adress: %s\n", strerror(errno));
     } else if (errno == EACCES) {
         //ignoring files and directories to which we don't have access
         return;
     } else {
-        printf("Something strange has happened with file: %s\n", strerror(errno));
+        fprintf(stderr,"Something strange has happened with file: %s\n", strerror(errno));
     }
     exit(0);
 }
+
 void check(std::string file_path, const std::string &file_name) {
     struct stat buf{};
     int status = stat(file_path.c_str(), &buf);
@@ -50,38 +51,37 @@ void check(std::string file_path, const std::string &file_name) {
         out_stat_errors();
         return;
     }
-    if ((!filter_inum || buf.st_ino == inum) &&
-        (!filter_name || file_name == name) &&
-        (!filter_nlinks || buf.st_nlink == nlinks) &&
-        (!filter_size || (type_size == 0 && buf.st_size < size) ||
-         (type_size == 1 && buf.st_size == size) ||
-         (type_size == 2 && buf.st_size > size)))
-        files.emplace_back(file_path);
+    if ((!filter_inum || buf.st_ino == inum) && (!filter_name || file_name == name)
+        && (!filter_nlinks || buf.st_nlink == nlinks)
+        && (!filter_size || (type_size == 0 && buf.st_size < size) || (type_size == 1 && buf.st_size == size)
+            || (type_size == 2 && buf.st_size > size))) {
+                files.emplace_back(file_path);
+    }
 }
 
 void dfs(const std::string &dir_name) {
-    DIR* directory = opendir(dir_name.c_str());
+    DIR *directory = opendir(dir_name.c_str());
     if (directory == nullptr) {
         if (errno == EACCES) {
             //Ignoring files and dirs to which we don't have access
             return;
         } else if (errno == ENOENT) {
-            printf("Directory does not exist, or dir_name is an empty string: %s\n", strerror(errno));
+            fprintf(stderr,"Directory does not exist, or dir_name is an empty string: %s\n", strerror(errno));
         } else if (errno == ENOTDIR) {
-            printf("dir_name is not a directory: %s\n", strerror(errno));
+            fprintf(stderr,"dir_name is not a directory: %s\n", strerror(errno));
         } else if (errno == ENOMEM) {
-            printf("Insufficient memory to complete the operation: %s\n", strerror(errno));
+            fprintf(stderr,"Insufficient memory to complete the operation: %s\n", strerror(errno));
         } else {
-            printf("Something strange happened while openning: %s\n", strerror(errno));
+            fprintf(stderr,"Something strange happened while openning: %s\n", strerror(errno));
         }
         exit(0);
     }
     while (true) {
         errno = 0;
-        dirent* v = readdir(directory);
+        dirent *v = readdir(directory);
         if (v == nullptr) {
             if (errno == EBADF) {
-                printf("Something strange happened with directory: %s\n", strerror(errno));
+                fprintf(stderr,"Something strange happened with directory: %s\n", strerror(errno));
                 exit(0);
             }
             break;
@@ -96,14 +96,14 @@ void dfs(const std::string &dir_name) {
     }
     int status = closedir(directory);
     if (status == -1) {
-        printf("Something strange happened with directory: %s\n", strerror(errno));
+        fprintf(stderr,"Something strange happened with directory: %s\n", strerror(errno));
         exit(0);
     }
 }
 
 void print_error_invalid_args(bool exp) {
     if (exp) {
-        printf("Invalid arguments!\n");
+        fprintf(stderr,"Invalid arguments!\n");
         exit(0);
     }
 }
@@ -114,7 +114,7 @@ void del_args() {
     }
 }
 
-int64_t parse_number(const char* s) {
+int64_t parse_number(const char *s) {
     int pos = 0;
     int kp = 1;
     int64_t n = 0;
@@ -122,24 +122,26 @@ int64_t parse_number(const char* s) {
         kp = -1;
         pos = 1;
     }
-    if (s[pos] == '\0')
+    if (s[pos] == '\0') {
         print_error_invalid_args(true);
+    }
     for (; s[pos] != '\0'; pos++) {
-        if (s[pos] < '0' || s[pos] > '9')
+        if (s[pos] < '0' || s[pos] > '9') {
             print_error_invalid_args(true);
+        }
         if (n > std::numeric_limits<int64_t>::max() / 10) {
             print_error_invalid_args(true);
         }
         n = 10 * n;
         if (n > std::numeric_limits<int64_t>::max() - (s[pos] - '0')) {
-            if (kp == -1 && n == std::numeric_limits<int64_t>::max() - (s[pos] - '0') + 1 &&
-                s[pos + 1] == '\0') {
+            if (kp == -1 && n == std::numeric_limits<int64_t>::max() - (s[pos] - '0') + 1 && s[pos + 1] == '\0') {
                 n *= kp;
                 n -= (s[pos] - '0');
                 kp = 1;
                 break;
-            } else
+            } else {
                 print_error_invalid_args(true);
+            }
         }
         n += (s[pos] - '0');
     }
@@ -147,9 +149,9 @@ int64_t parse_number(const char* s) {
     return n;
 }
 
-int main(int argc, char** argv) {
+int main(int argc, char **argv) {
     if (argc < 2 || argc % 2) {
-        printf("Wrong number of arguments!\n");
+        fprintf(stderr,"Wrong number of arguments!\n");
         return 0;
     }
     for (int i = 2; i < argc; i += 2) {
@@ -161,9 +163,9 @@ int main(int argc, char** argv) {
         } else if (arg == "-inum") {
             print_error_invalid_args(filter_inum);
             int64_t num = parse_number(argv[i + 1]);
-            if (std::numeric_limits<ino_t>::min() > num ||
-                std::numeric_limits<ino_t>::max() < num)
+            if (std::numeric_limits<ino_t>::min() > num || std::numeric_limits<ino_t>::max() < num) {
                 print_error_invalid_args(true);
+            }
             inum = static_cast<ino_t>(num);
             filter_inum = true;
         } else if (arg == "-name") {
@@ -173,9 +175,9 @@ int main(int argc, char** argv) {
         } else if (arg == "-nlinks") {
             print_error_invalid_args(filter_nlinks);
             int64_t num = parse_number(argv[i + 1]);
-            if (std::numeric_limits<nlink_t>::min() > num ||
-                std::numeric_limits<nlink_t>::max() < num)
+            if (std::numeric_limits<nlink_t>::min() > num || std::numeric_limits<nlink_t>::max() < num) {
                 print_error_invalid_args(true);
+            }
             nlinks = static_cast<nlink_t>(num);
             filter_nlinks = true;
         } else if (arg == "-size") {
@@ -190,9 +192,9 @@ int main(int argc, char** argv) {
                 print_error_invalid_args(true);
             }
             int64_t num = parse_number(argv[i + 1] + 1);
-            if (std::numeric_limits<off_t>::min() > num ||
-                std::numeric_limits<off_t>::max() < num)
+            if (std::numeric_limits<off_t>::min() > num || std::numeric_limits<off_t>::max() < num) {
                 print_error_invalid_args(true);
+            }
             size = num;
             filter_size = true;
         }
@@ -201,8 +203,7 @@ int main(int argc, char** argv) {
     int error_status = stat(argv[1], &buf);
     if (error_status == -1) {
         out_stat_errors();
-    } else
-    if (buf.st_mode & S_IFREG) {
+    } else if (buf.st_mode & S_IFREG) {
         std::string file_name;
         for (int i = 0; argv[1][i] != '\0'; i++) {
             if (argv[1][i] == '/') {
@@ -223,7 +224,7 @@ int main(int argc, char** argv) {
             pos++;
             if (pos == MAX_ARGS) {
                 parsed[pos] = nullptr;
-                printf("Too many arguments\n");
+                fprintf(stderr,"Too many arguments\n");
                 del_args();
                 return 0;
             }
@@ -236,7 +237,7 @@ int main(int argc, char** argv) {
             tries++;
         } while (child_pid == -1 && errno == EAGAIN && tries <= MAX_RETRIES);
         if (child_pid == -1) {
-            printf("Can't fork process: %s\n", strerror(errno));
+            fprintf(stderr,"Can't fork process: %s\n", strerror(errno));
             del_args();
             return 0;
         }
@@ -249,7 +250,7 @@ int main(int argc, char** argv) {
                 tries++;
             } while (status == -1 && errno == EAGAIN && tries <= MAX_RETRIES);
             if (status == -1) {
-                printf("Errors while execution: %s\n", strerror(errno));
+                fprintf(stderr,"Errors while execution: %s\n", strerror(errno));
             }
             del_args();
             return 0;
@@ -260,21 +261,24 @@ int main(int argc, char** argv) {
                 result = waitpid(child_pid, &status, 0);
             } while (result == -1 && errno == EINTR);
             if (result == -1) {
-                printf("Can't wait for the result of child: %s\n", strerror(errno));
+                fprintf(stderr,"Can't wait for the result of child: %s\n", strerror(errno));
             } else if (WIFEXITED(status)) {
                 int exit_code = WEXITSTATUS(status);
-                printf("Process finished with exit code %d\n", exit_code);
+                if (exit_code == 0)
+                    fprintf(stdout,"Process finished with exit code %d\n", exit_code);
+                else
+                    fprintf(stderr,"Process finished with exit code %d\n", exit_code);
             } else if (WIFSIGNALED(status)) {
                 int term_signal = WTERMSIG(status);
-                printf("Process terminated with signal %s\n", strsignal(term_signal));
+                fprintf(stderr,"Process terminated with signal %s\n", strsignal(term_signal));
             } else {
-                printf("Something strange happened with process\n");
+                fprintf(stderr,"Something strange happened with process\n");
             }
         }
         del_args();
     } else {
         for (const auto &v : files) {
-            printf("%s\n", v.c_str());
+            fprintf(stdout,"%s\n", v.c_str());
         }
     }
     return 0;
